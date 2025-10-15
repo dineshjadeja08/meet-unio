@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.db import models
 from .models import Meeting, MeetingParticipant, MeetingInvite
 from .serializers import (
     MeetingSerializer, MeetingCreateSerializer, MeetingUpdateSerializer,
@@ -112,51 +113,112 @@ class MeetingViewSet(viewsets.ModelViewSet):
         
         serializer = MeetingSerializer(meetings, many=True)
         return Response(serializer.data)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def send_invite(request):
-    """Send meeting invites to users."""
-    serializer = SendInviteSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    meeting_id = serializer.validated_data['meeting_id']
-    invitee_ids = serializer.validated_data['invitee_ids']
-    
-    meeting = get_object_or_404(Meeting, id=meeting_id)
-    
-    # Only host can send invites
-    if meeting.host != request.user:
-        return Response(
-            {'error': 'Only the meeting host can send invites.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
-    
-    invites_created = []
-    errors = []
-    
-    for invitee_id in invitee_ids:
-        try:
-            invitee = User.objects.get(id=invitee_id)
-            invite, created = MeetingInvite.objects.get_or_create(
-                meeting=meeting,
-                invitee=invitee
+    @action(detail=True, methods=['post'])
+    def start(self, request, pk=None):
+        """Start a meeting."""
+        meeting = self.get_object()
+        
+        # Only host can start meeting
+        if meeting.host != request.user:
+            return Response(
+                {'error': 'Only the meeting host can start the meeting.'},
+                status=status.HTTP_403_FORBIDDEN
             )
-            if created:
-                invites_created.append(invitee.email)
-            else:
-                errors.append(f'{invitee.email} already invited')
-        except User.DoesNotExist:
-            errors.append(f'User with id {invitee_id} not found')
+        
+        if meeting.status == 'ongoing':
+            return Response(
+                {'error': 'Meeting is already ongoing.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if meeting.status == 'completed':
+            return Response(
+                {'error': 'Meeting is already completed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        meeting.status = 'ongoing'
+        meeting.started_at = timezone.now()
+        meeting.save()
+        
+        return Response({
+            'message': 'Meeting started successfully',
+            'meeting': MeetingSerializer(meeting).data
+        })
     
-    return Response({
-        'message': f'Invites sent to {len(invites_created)} users',
-        'invites_sent': invites_created,
-        'errors': errors
-    }, status=status.HTTP_200_OK)
-
-
-# Import at the top after other imports
-from django.db import models
+    @action(detail=True, methods=['post'])
+    def end(self, request, pk=None):
+        """End a meeting."""
+        meeting = self.get_object()
+        
+        # Only host can end meeting
+        if meeting.host != request.user:
+            return Response(
+                {'error': 'Only the meeting host can end the meeting.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if meeting.status == 'completed':
+            return Response(
+                {'error': 'Meeting is already completed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if meeting.status == 'scheduled':
+            return Response(
+                {'error': 'Cannot end a meeting that has not started yet.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        meeting.status = 'completed'
+        meeting.ended_at = timezone.now()
+        meeting.save()
+        
+        return Response({
+            'message': 'Meeting ended successfully',
+            'meeting': MeetingSerializer(meeting).data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def send_invite(self, request, pk=None):
+        """Send meeting invites to users."""
+        meeting = self.get_object()
+        
+        # Only host can send invites
+        if meeting.host != request.user:
+            return Response(
+                {'error': 'Only the meeting host can send invites.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        invitee_ids = request.data.get('invitee_ids', [])
+        
+        if not invitee_ids:
+            return Response(
+                {'error': 'invitee_ids is required and must not be empty.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        invites_created = []
+        errors = []
+        
+        for invitee_id in invitee_ids:
+            try:
+                invitee = User.objects.get(id=invitee_id)
+                invite, created = MeetingInvite.objects.get_or_create(
+                    meeting=meeting,
+                    invitee=invitee
+                )
+                if created:
+                    invites_created.append(invitee.email)
+                else:
+                    errors.append(f'{invitee.email} already invited')
+            except User.DoesNotExist:
+                errors.append(f'User with id {invitee_id} not found')
+        
+        return Response({
+            'message': f'Invites sent to {len(invites_created)} users',
+            'invited': invites_created,
+            'errors': errors
+        }, status=status.HTTP_201_CREATED)

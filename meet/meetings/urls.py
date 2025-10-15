@@ -6,6 +6,5 @@ router = DefaultRouter()
 router.register(r'', views.MeetingViewSet, basename='meeting')
 
 urlpatterns = [
-    path('invite', views.send_invite, name='send_invite'),
     path('', include(router.urls)),
 ]

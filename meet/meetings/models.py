@@ -21,6 +21,16 @@ class Meeting(models.Model):
     duration = models.IntegerField(help_text='Duration in minutes', default=60)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     meeting_link = models.URLField(blank=True)
+    
+    # Recording and AI Features
+    recording_url = models.URLField(blank=True, null=True, help_text='URL to the meeting recording')
+    recording_started_at = models.DateTimeField(null=True, blank=True)
+    recording_ended_at = models.DateTimeField(null=True, blank=True)
+    transcript = models.TextField(blank=True, help_text='AI-generated transcript of the meeting')
+    ai_summary = models.TextField(blank=True, help_text='AI-generated summary of the meeting')
+    action_items = models.JSONField(default=list, blank=True, help_text='AI-extracted action items from the meeting')
+    key_points = models.JSONField(default=list, blank=True, help_text='AI-identified key discussion points')
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

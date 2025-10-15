@@ -26,8 +26,12 @@ schema_view = get_schema_view(
         - **Notifications**: Push notifications for meeting events
         
         ## Authentication
-        Most endpoints require JWT authentication. Use the `/api/auth/login` endpoint to obtain a token,
-        then include it in the Authorization header: `Bearer <your_token>`
+        1. Login via `/api/auth/login` to get your JWT token
+        2. Click the "Authorize" button (🔓) at the top right
+        3. Enter: `Bearer <your_access_token>` (include the word "Bearer" followed by a space)
+        4. Click "Authorize" then "Close"
+        
+        All authenticated endpoints will now work with your token.
         """,
         terms_of_service="https://www.unio.com/terms/",
         contact=openapi.Contact(email="support@unio.com"),
@@ -35,6 +39,7 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
+    authentication_classes=[],
 )
 
 urlpatterns = [

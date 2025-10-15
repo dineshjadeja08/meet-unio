@@ -106,6 +106,29 @@ def upload_file(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def get_files(request, meeting_id):
+    """
+    Get all shared files for a meeting.
+    """
+    meeting = get_object_or_404(Meeting, id=meeting_id)
+    
+    # Check if user is part of the meeting
+    is_host = meeting.host == request.user
+    is_participant = meeting.participants.filter(user=request.user).exists()
+    
+    if not (is_host or is_participant):
+        return Response(
+            {'error': 'You are not authorized to view files in this meeting.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    files = SharedFile.objects.filter(meeting=meeting)
+    serializer = SharedFileSerializer(files, many=True, context={'request': request})
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def download_file(request, file_id):
     """
     Download a shared file.
